@@ -144,6 +144,14 @@ return [
         'sandbox' => false,
         'callback-url'   => '/',
     ],
+    //--------------------------------
+    // Novinpal gateway
+    //--------------------------------
+    'novinpal' => [
+        'api_key' => null,
+        'secret_key' => null,
+        'callback_url' => null
+    ],
     //-------------------------------
     // Tables names
     //--------------------------------

@@ -1,6 +1,7 @@
 <?php
 namespace Mozakar\Gateway;
 
+use Exception;
 use Illuminate\Support\Facades\Request;
 use Mozakar\Gateway\Enum;
 use Carbon\Carbon;
@@ -585,4 +586,105 @@ abstract class PortAbstract
 	{
 		return "Mozakar_Gateway_" . $key;
 	}
+
+    /**
+     * Perform a cURL request with error handling.
+     *
+     * @param string $url The URL to make the request to.
+     * @param string $method The HTTP method (e.g., GET, POST, PUT, DELETE).
+     * @param array $data The request data (optional).
+     * @param array $headers The request headers (optional).
+     * @param bool $json If the request is json
+     * @return string The response body.
+     * @throws Exception if the request fails or encounters an error.
+     */
+    protected function request($url, $method = 'GET', $data = [], $headers = [], $json = false)
+    {
+        $ch = curl_init();
+
+        // Set the URL and other options
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+
+        // Set request data if provided
+        if (!empty($data)) {
+            if($json) {
+                $headers[] = 'Content-Type: application/json';
+                $data = json_encode($data);
+            } else {
+                $data = http_build_query($data);
+            }
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        }
+
+        // Set request headers if provided
+        if (!empty($headers)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        // Execute the request and capture the response
+        $response = curl_exec($ch);
+
+        // Check for cURL errors
+        if ($response === false) {
+            $errorMessage = curl_error($ch);
+            $errorCode = curl_errno($ch);
+            curl_close($ch);
+            throw new Exception("cURL request failed: [{$errorCode}] {$errorMessage}");
+        }
+
+        // Get the HTTP status code
+        $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        // Close the cURL session
+        curl_close($ch);
+
+        // Handle the response
+        if ($response) {
+            return $response;
+        } else {
+            throw new Exception("Request failed with HTTP status code: {$statusCode}");
+        }
+    }
+
+    /**
+     * Perform a JSON POST request with error handling.
+     *
+     * @param string $url The URL to make the request to.
+     * @param array $data The request data.
+     * @param array $headers The request headers (optional).
+     * @return array The decoded JSON response.
+     * @throws Exception if the request fails, encounters an error, or if the response is not valid JSON.
+     */
+    protected function jsonRequest($url, $data, $headers = [])
+    {
+        $response = $this->request($url, 'POST', $data, $headers, true);
+
+        // Decode the JSON response
+        $responseData = json_decode($response, true);
+
+        // Check if JSON decoding was successful
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception("Invalid JSON response: " . json_last_error_msg());
+        }
+
+        return $responseData;
+    }
+
+    /**
+     * @param string $maskedCardNumber
+     * @return boolean
+     */
+    protected function validateCardNumber($maskedCardNumber) {
+        foreach($this->getValidCardNumbers() as $validCardNumber) {
+            if (preg_replace("/(\d{6}).*(\d{4})/", "$1******$2", $validCardNumber) == $maskedCardNumber)
+                return true;
+        }
+
+        return false;
+    }
 }
